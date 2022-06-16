@@ -50,15 +50,15 @@ def send_message(bot, message):
         logging.info(
             'Отправляем сообщение в телеграм: %s', message
         )
-        response = bot.send_message(TELEGRAM_CHAT_ID, message)
+        bot.send_message(TELEGRAM_CHAT_ID, message)
 
-        if response.statuscode != HTTPStatus.OK:
-            raise APIStatusCodeError(
-                'Неверный ответ сервера: '
-                f'http code = {response.status_code}; '
-                f'reason = {response.reason}; '
-                f'content = {response.text}'
-            )
+        # if response.statuscode != HTTPStatus.OK:
+        #     raise APIStatusCodeError(
+        #         'Неверный ответ сервера: '
+        #         f'http code = {response.status_code}; '
+        #         f'reason = {response.reason}; '
+        #         f'content = {response.text}'
+        #     )
     except Exception as error:
         raise TelegramError(
             f'Ошибка отправки сообщения в телеграм: {error}'
@@ -76,13 +76,20 @@ def get_api_answer(current_timestamp):
         )
         timestamp = current_timestamp or int(time.time())
         params = {'from_date': timestamp}
-        response = requests.get(ENDPOINT, headers=HEADERS, params=params).json
+        response = requests.get(ENDPOINT, headers=HEADERS, params=params)
+        if response.status_code != HTTPStatus.OK:
+            raise APIStatusCodeError(
+                'Неверный ответ сервера: '
+                f'http code = {response.status_code}; '
+                f'reason = {response.reason}; '
+                f'content = {response.text}'
+            )
     except Exception as error:
         raise YandeksError(
             'Ошибка подключения к Яндекс Практикуму'
         ) from error
     else:
-        return response
+        return response.json()
 
 
 def check_response(response):
