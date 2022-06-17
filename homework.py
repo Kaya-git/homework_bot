@@ -10,7 +10,7 @@ import threading
 import enum
 from exceptions import (
     APIResponseError, APIStatusCodeError,
-    YandeksError, TelegramError, ParseStatusError
+    YandeksError, TelegramError
 )
 
 
@@ -88,64 +88,50 @@ def get_api_answer(current_timestamp):
 
 
 def check_response(response):
-    """Проверка ответа от API."""
-    logging.info('Проверка ответа от API начата')
-    if not isinstance(response, dict):
-        raise TypeError(
-            f'Ответ от API не является словарем = {response}'
-        )
-    homeworks = response.get('homeworks')
-    if homeworks is None:
-        raise APIResponseError(
-            'В ответе API отсутствуют необходимый ключ "homeworks", '
-            f'response = {response}'
-        )
-    for item in homeworks:
-        if not isinstance(item, dict):
-            raise TypeError(
-                "В ключе homeworks пришли не словари, "
-                f'homeworks = {homeworks}'
-            )
+    """Функция проверяет ответ yandex practicum на корректность."""
+    if not isinstance(response, dict) or response is None:
+        message = 'Ответ API не содержит словаря с данными'
+        raise TypeError(message)
 
-        status = item.get('status')
-        if status is None:
-            raise APIResponseError(
-                'В ответе API отсутсвует необходимый ключ "status", '
-                f'homeworks = {homeworks}'
-            )
+    elif any([response.get('homeworks') is None,
+              response.get('current_date') is None]):
+        message = ('Словарь ответа API не содержит ключей homeworks и/или '
+                   'current_date')
+        raise KeyError(message)
 
-        homework_name = item.get('homework_name')
-        if homework_name is None:
-            raise APIResponseError(
-                'В ответе API отсутсвует необходимый ключ "homework_name", '
-                f'homeworks = {homeworks}'
-            )
+    elif not isinstance(response.get('homeworks'), list):
+        message = 'Ключ homeworks в ответе API не содержит списка'
+        raise TypeError(message)
 
-    current_data = response.get('current_date')
-    if current_data is None:
-        raise APIResponseError(
-            'В ответе API отсутствуют необходимый ключ "current_date", '
-            f'response = {response}'
-        )
-    homework = {'homework_name': homework_name,
-                'status': status
-                }
-    return homework
+    elif not response.get('homeworks'):
+        logging.debug('Статус проверки не изменился')
+        return []
+
+    else:
+        return response['homeworks']
 
 
 def parse_status(homework):
-    """Возвращаям статус полученной работы."""
-    logging.info('Возвращаем статус полученной работы.')
-    try:
-        homework_name = homework.get('homework_name')
-        homework_status = homework.get('status')
-        verdict = HOMEWORK_STATUSES.get(homework_status)
-    except Exception as error:
-        raise ParseStatusError(
-            'Ошибка возврата статуса полученной работы.'
-        ) from error
+    """Функция возвращает ответ API yandex practicum со статусом проверки."""
+    if homework.get('homework_name') is None:
+        message = 'Словарь ответа API не содержит ключа homework_name'
+        raise KeyError(message)
+    elif homework.get('status') is None:
+        message = 'Словарь ответа API не содержит ключа status'
+        raise KeyError(message)
+    homework_name = homework['homework_name']
+    homework_status = homework['status']
+
+    if homework_status in HOMEWORK_STATUSES:
+        verdict = HOMEWORK_STATUSES[homework_status]
     else:
-        return f'Изменился статус проверки работы "{homework_name}". {verdict}'
+        message = 'Статус ответа не известен'
+        raise APIResponseError(message)
+
+    message = (f'Изменился статус проверки работы "{homework_name}".'
+               f' {verdict}')
+    logging.debug(message)
+    return message
 
 
 def check_tokens():
