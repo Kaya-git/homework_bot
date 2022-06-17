@@ -15,6 +15,8 @@ from exceptions import (
 
 
 class State(enum.Enum):
+    """Класс состояний."""
+
     INITIAL = 0
     RUNNING = 1
     STOPPED = 2
@@ -51,14 +53,6 @@ def send_message(bot, message):
             'Отправляем сообщение в телеграм: %s', message
         )
         bot.send_message(TELEGRAM_CHAT_ID, message)
-
-        # if response.statuscode != HTTPStatus.OK:
-        #     raise APIStatusCodeError(
-        #         'Неверный ответ сервера: '
-        #         f'http code = {response.status_code}; '
-        #         f'reason = {response.reason}; '
-        #         f'content = {response.text}'
-        #     )
     except Exception as error:
         raise TelegramError(
             f'Ошибка отправки сообщения в телеграм: {error}'
@@ -84,18 +78,18 @@ def get_api_answer(current_timestamp):
                 f'reason = {response.reason}; '
                 f'content = {response.text}'
             )
+        response = response.json()
     except Exception as error:
         raise YandeksError(
             'Ошибка подключения к Яндекс Практикуму'
         ) from error
     else:
-        return response.json()
+        return response
 
 
 def check_response(response):
     """Проверка ответа от API."""
     logging.info('Проверка ответа от API начата')
-    print(response)
     if not isinstance(response, dict):
         raise TypeError(
             f'Ответ от API не является словарем = {response}'
@@ -106,9 +100,26 @@ def check_response(response):
             'В ответе API отсутствуют необходимый ключ "homeworks", '
             f'response = {response}'
         )
-    homeworks_last = homeworks[0]
-    homework_name = homeworks_last.get('homework_name')
-    status = homeworks_last.get('status')
+    for item in homeworks:
+        if not isinstance(item, dict):
+            raise TypeError(
+                "В ключе homeworks пришли не словари, "
+                f'homeworks = {homeworks}'
+            )
+
+        status = item.get('status')
+        if status is None:
+            raise APIResponseError(
+                'В ответе API отсутсвует необходимый ключ "status", '
+                f'homeworks = {homeworks}'
+            )
+
+        homework_name = item.get('homework_name')
+        if homework_name is None:
+            raise APIResponseError(
+                'В ответе API отсутсвует необходимый ключ "homework_name", '
+                f'homeworks = {homeworks}'
+            )
 
     current_data = response.get('current_date')
     if current_data is None:
@@ -185,6 +196,7 @@ def main():
 
 
 def repl():
+    """Создаем цикл с командой для остановки."""
     global state
     while True:
         command = input('Please, press "s" to stop')

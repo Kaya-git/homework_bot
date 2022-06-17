@@ -1,3 +1,7 @@
+class EmptyListError(Exception):
+    pass
+
+
 class ParseStatusError(Exception):
     pass
 
