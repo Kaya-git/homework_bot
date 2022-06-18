@@ -1,17 +1,16 @@
+import enum
 import logging
-import requests
-import time
-from dotenv import load_dotenv
 import os
-import telegram
-from http import HTTPStatus
 import sys
 import threading
-import enum
-from exceptions import (
-    APIResponseError, APIStatusCodeError,
-    YandeksError, TelegramError
-)
+import time
+from http import HTTPStatus
+
+import requests
+import telegram
+from dotenv import load_dotenv
+
+from exceptions import (APIResponseError, APIStatusCodeError, TelegramError)
 
 
 class State(enum.Enum):
@@ -39,7 +38,7 @@ ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
 
-HOMEWORK_STATUSES = {
+HOMEWORK_VERDICTS = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
@@ -63,28 +62,27 @@ def send_message(bot, message):
 
 def get_api_answer(current_timestamp):
     """Делаем запрос к Яндекс Апи и возвращаем ответ."""
-    try:
-        logging.info(
-            'Делаем запрос по статусу заданий с временной меткой %s',
-            current_timestamp
+    logging.info(
+        'Делаем запрос по статусу заданий с временной меткой %s',
+        current_timestamp
+    )
+    timestamp = current_timestamp or int(time.time())
+    params = {'from_date': timestamp}
+    data = {
+        'url': ENDPOINT,
+        'headers': HEADERS,
+        'params': params
+    }
+    response = requests.get(**data)
+    if response.status_code != HTTPStatus.OK:
+        raise APIStatusCodeError(
+            'Неверный ответ сервера: '
+            f'http code = {response.status_code}; '
+            f'reason = {response.reason}; '
+            f'content = {response.text}'
         )
-        timestamp = current_timestamp or int(time.time())
-        params = {'from_date': timestamp}
-        response = requests.get(ENDPOINT, headers=HEADERS, params=params)
-        if response.status_code != HTTPStatus.OK:
-            raise APIStatusCodeError(
-                'Неверный ответ сервера: '
-                f'http code = {response.status_code}; '
-                f'reason = {response.reason}; '
-                f'content = {response.text}'
-            )
-        response = response.json()
-    except Exception as error:
-        raise YandeksError(
-            'Ошибка подключения к Яндекс Практикуму'
-        ) from error
-    else:
-        return response
+    response = response.json()
+    return response
 
 
 def check_response(response):
@@ -93,22 +91,20 @@ def check_response(response):
         message = 'Ответ API не содержит словаря с данными'
         raise TypeError(message)
 
-    elif any([response.get('homeworks') is None,
-              response.get('current_date') is None]):
+    if any([response.get('homeworks') is None,
+            response.get('current_date') is None]):
         message = ('Словарь ответа API не содержит ключей homeworks и/или '
                    'current_date')
         raise KeyError(message)
 
-    elif not isinstance(response.get('homeworks'), list):
+    if not isinstance(response.get('homeworks'), list):
         message = 'Ключ homeworks в ответе API не содержит списка'
         raise TypeError(message)
 
-    elif not response.get('homeworks'):
+    if not response.get('homeworks'):
         logging.debug('Статус проверки не изменился')
         return []
-
-    else:
-        return response['homeworks']
+    return response['homeworks']
 
 
 def parse_status(homework):
@@ -116,14 +112,15 @@ def parse_status(homework):
     if homework.get('homework_name') is None:
         message = 'Словарь ответа API не содержит ключа homework_name'
         raise KeyError(message)
-    elif homework.get('status') is None:
+    if homework.get('status') is None:
         message = 'Словарь ответа API не содержит ключа status'
         raise KeyError(message)
+
     homework_name = homework['homework_name']
     homework_status = homework['status']
 
-    if homework_status in HOMEWORK_STATUSES:
-        verdict = HOMEWORK_STATUSES[homework_status]
+    if homework_status in HOMEWORK_VERDICTS:
+        verdict = HOMEWORK_VERDICTS[homework_status]
     else:
         message = 'Статус ответа не известен'
         raise APIResponseError(message)
